@@ -1,0 +1,37 @@
+name: Submit copr build
+inputs:
+  coprcfg:
+    description: Path to the copr configuration file
+    required: true
+  srpm:
+    description: Path to the source rpm
+    required: true
+  project:
+    description: Copr project name
+    required: true
+  account:
+    description: Copr user or @group
+    required: true
+  chroots:
+    description: Space separate list of chroots
+    required: true
+runs:
+  using: 'composite'
+  steps:
+  - name: Submit copr build
+    shell: bash
+    env:
+      SRPM: ${{ inputs.srpm }}
+      COPRCFG: ${{ inputs.coprcfg }}
+      ACCOUNT: ${{ inputs.account }}
+      PROJECT: ${{ inputs.project }}
+      CHROOTS: ${{ inputs.chroots }}
+    run: |
+      set -ex
+
+      args=""
+      for chroot in $CHROOTS; do
+        args+=" --chroot $chroot"
+      done
+
+      copr-cli --config "$COPRCFG" build $args "$ACCOUNT/$PROJECT" "$SRPM"

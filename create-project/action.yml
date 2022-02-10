@@ -1,0 +1,78 @@
+name: Create copr project
+inputs:
+  coprcfg:
+    description: Path to the copr configuration file
+    required: true
+  project:
+    description: Copr project name
+    required: true
+  account:
+    description: Copr user or @group
+    required: true
+  chroots:
+    description: Space separate list of chroots
+    required: true
+  description:
+    description: Copr project description.
+    required: false
+    default: ""
+  instructions:
+    description: Copr project instructions.
+    required: false
+    default: ""
+  appstream:
+    description: Build appsream metadata.
+    required: false
+    default: "off"
+  unlisted-on-hp:
+    description: Visible on home page.
+    required: false
+    default: "on"
+  fedora-review:
+    description: Require fedora review.
+    required: false
+    default: "on"
+  delete-after-days:
+    description: Delete after days.
+    required: false
+    default: "60"
+runs:
+  using: 'composite'
+  steps:
+  - name: Create copr project
+    shell: bash
+    env:
+      COPRCFG: ${{ inputs.coprcfg }}
+      ACCOUNT: ${{ inputs.account }}
+      PROJECT: ${{ inputs.project }}
+      CHROOTS: ${{ inputs.chroots }}
+      DESCRIPTION: ${{ inputs.description }}
+      INSTRUCTIONS: ${{ inputs.instructions }}
+      UNLISTED_ON_HP: ${{ inputs.unlisted-on-hp }}
+      APPSTREAM: ${{ inputs.appstream }}
+      FEDORA_REVIEW: ${{ inputs.fedora-review }}
+      DELETE_AFTER_DAYS: ${{ inputs.delete-after-days }}
+    run: |
+      set -ex
+
+      if copr-cli --config "$COPRCFG" list "$ACCOUNT" | grep "Name: $PROJECT" &> /dev/null; then
+        echo "Project $PROJECT already exist. Nothing to do."
+        exit 0
+      fi
+
+      args=""
+
+      if [ x"$FEDORA_REVIEW" == xon ]; then
+        args+=" --fedora-review"
+      fi
+
+      for chroot in $CHROOTS; do
+        args+=" --chroot $chroot"
+      done
+
+      copr-cli --config "$COPRCFG" create "$ACCOUNT/$PROJECT" $args \
+        --unlisted-on-hp "$UNLISTED_ON_HP"                          \
+        --appstream "$APPSTREAM"                                    \
+        --delete-after-days "$DELETE_AFTER_DAYS"                    \
+        --description "$DESCRIPTION"                                \
+        --instructions "$INSTRUCTIONS"

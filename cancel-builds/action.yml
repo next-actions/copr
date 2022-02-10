@@ -1,0 +1,27 @@
+name: Cancel previous copr builds
+inputs:
+  coprcfg:
+    description: Path to the copr configuration file
+    required: true
+  project:
+    description: Copr project name
+    required: true
+  account:
+    description: Copr user or @group
+    required: true
+runs:
+  using: 'composite'
+  steps:
+  - name: Try to cancel running and pending runs
+    shell: bash
+    env:
+      COPRCFG: ${{ inputs.coprcfg }}
+      ACCOUNT: ${{ inputs.account }}
+      PROJECT: ${{ inputs.project }}
+    run: |
+      # We ignore errors here
+      set +e -x
+
+      builds=`copr-cli --config "$COPRCFG" list-builds --output-format text-row "$ACCOUNT/$PROJECT" | grep -E "importing|pending|starting|running|waiting" | cut -f1`
+      for i in $builds; do copr-cli --config "$COPRCFG" cancel $i; done
+      exit 0

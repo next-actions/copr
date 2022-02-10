@@ -1,0 +1,33 @@
+name: Delete copr project
+inputs:
+  coprcfg:
+    description: Path to the copr configuration file
+    required: true
+  filter:
+    description: Extended regular expression.
+    required: true
+  exclude:
+    description: Extended regular expression. Items that match will be excluded from the list.
+    required: false
+    default: '#invalidname#'
+outputs:
+  list:
+    description: Space separated list of filtered chroots.
+    value: ${{ steps.result.outputs.list }}
+  json:
+    description: List of filtered chroots in json format.
+    value: ${{ steps.result.outputs.json }}
+runs:
+  using: 'composite'
+  steps:
+  - name: Filter chroots
+    id: result
+    shell: bash
+    run: |
+      set -ex
+
+      list=`copr-cli --config "${{ inputs.coprcfg }}" list-chroots | grep -E "${{ inputs.filter }}" | grep -E -v "${{ inputs.exclude }}" | tr '\n' ' '`
+      json=`jq -c -n --arg item "$list" '$item | split(" ") | map(select(length > 0))'`
+
+      echo ::set-output name=list::$list
+      echo ::set-output name=json::$json

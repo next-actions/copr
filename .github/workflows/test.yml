@@ -1,0 +1,234 @@
+name: Test actions
+on:
+  push:
+  pull_request_target:
+env:
+  COPR_PROJECT: action-copr-${{ github.run_number }}
+  COPR_ACCOUNT: '@sssd'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  srpm:
+    runs-on: ubuntu-latest
+    outputs:
+      srpm: ${{ steps.srpm.outputs.file }}
+    steps:
+    - name: Create mock project tarball
+      run: |
+        echo "#!/bin/bash"      > test.sh
+        echo "echo I am here." >> test.sh
+        tar -cvzf action-copr-1.tar.gz --transform "s,^,action-copr-1/," *
+
+    - name: Create spec file
+      shell: bash
+      run: |
+        cat <<EOF > test.spec
+        Name:           action-copr
+        Version:        1
+        Release:        1%{?dist}
+        Summary:        Test action-copr
+        URL:            https://github.com/next-actions/action-copr
+
+        License:        GPLv3+
+        Source0:        %{url}/archive/%{version}/%{name}-%{version}.tar.gz
+
+        %description
+        Test action-copr.
+
+        %prep
+        %setup -q
+
+        %install
+        mkdir -p %{buildroot}/%{_bindir}
+        mv test.sh %{buildroot}/%{_bindir}/
+        chmod a+x %{buildroot}/%{_bindir}/test.sh
+
+        %files
+        %{_bindir}/test.sh
+        EOF
+
+    - name: Build source rpm
+      id: srpm
+      uses: next-actions/build-srpm@master
+      with:
+        tarball: action-copr-1.tar.gz
+        specfile: test.spec
+
+    - name: Upload source rpm as an artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ steps.srpm.outputs.file }}
+        path: ${{ steps.srpm.outputs.path }}
+
+  chroots:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      list: ${{ steps.result.outputs.list }}
+      json: ${{ steps.result.outputs.json }}
+    steps:
+    - name: Checkout out branch
+      uses: actions/checkout@v2
+      if: github.event_name == 'push'
+
+    - name: Checkout out pull request
+      uses: actions/checkout@v2
+      if: github.event_name != 'push'
+      with:
+        ref: ${{ github.head_ref }}
+
+    - name: Init copr
+      uses: ./init
+      with:
+        token: ${{ secrets.COPR_SECRETS }}
+
+    - name: Get chroots
+      id: result
+      uses: ./filter-chroots
+      with:
+        filter: "fedora-[0-9]+-x86_64"
+
+  create:
+    runs-on: ubuntu-latest
+    needs: [srpm, chroots]
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout out branch
+      uses: actions/checkout@v2
+      if: github.event_name == 'push'
+
+    - name: Checkout out pull request
+      uses: actions/checkout@v2
+      if: github.event_name != 'push'
+      with:
+        ref: ${{ github.head_ref }}
+
+    - name: Init copr
+      id: init
+      uses: ./init
+      with:
+        token: ${{ secrets.COPR_SECRETS }}
+
+    - name: Create copr project
+      uses: ./create-project
+      with:
+        coprcfg: ${{ steps.init.outputs.coprcfg }}
+        chroots: ${{ needs.chroots.outputs.list }}
+        project: ${{ env.COPR_PROJECT }}
+        account: ${{ env.COPR_ACCOUNT }}
+        delete-after-days: 1
+        fedora-review: off
+
+    - name: Test that project was created
+      env:
+        COPRCFG: ${{ steps.init.outputs.coprcfg }}
+      run: |
+        if copr-cli --config "$COPRCFG" list "$COPR_ACCOUNT" | grep "$COPR_PROJECT" &> /dev/null; then
+          echo "Project exist."
+          exit 0
+        else
+          echo "Project does not exist."
+          exit 1
+        fi
+
+    - name: Cancel pending builds
+      uses: ./cancel-builds
+      with:
+        coprcfg: ${{ steps.init.outputs.coprcfg }}
+        project: ${{ env.COPR_PROJECT }}
+        account: ${{ env.COPR_ACCOUNT }}
+
+    - name: Test that there are no pending builds
+      env:
+        COPRCFG: ${{ steps.init.outputs.coprcfg }}
+      run: |
+        if copr-cli --config "$COPRCFG" list-builds --output-format text-row "$COPR_ACCOUNT/$COPR_PROJECT" | grep "running\|pending"; then
+          echo "Pending builds exists."
+          exit 1
+        else
+          echo "All builds were cancelled."
+          exit 0
+        fi
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [create, chroots, srpm]
+    strategy:
+      matrix:
+        chroot: ${{ fromJson(needs.chroots.outputs.json) }}
+      fail-fast: false
+    steps:
+    - name: Checkout out branch
+      uses: actions/checkout@v2
+      if: github.event_name == 'push'
+
+    - name: Checkout out pull request
+      uses: actions/checkout@v2
+      if: github.event_name != 'push'
+      with:
+        ref: ${{ github.head_ref }}
+
+    - uses: actions/download-artifact@v2
+      with:
+        name: ${{ needs.srpm.outputs.srpm }}
+        path: .
+
+    - name: Init copr
+      id: init
+      uses: ./init
+      with:
+        token: ${{ secrets.COPR_SECRETS }}
+
+    - name: Build srpm in copr for ${{ matrix.chroot }}
+      uses: ./submit-build
+      with:
+        coprcfg: ${{ steps.init.outputs.coprcfg }}
+        srpm: ${{ needs.srpm.outputs.srpm }}
+        chroots: ${{ matrix.chroot }}
+        project: ${{ env.COPR_PROJECT }}
+        account: ${{ env.COPR_ACCOUNT }}
+
+  delete:
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: always()
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout out branch
+      uses: actions/checkout@v2
+      if: github.event_name == 'push'
+
+    - name: Checkout out pull request
+      uses: actions/checkout@v2
+      if: github.event_name != 'push'
+      with:
+        ref: ${{ github.head_ref }}
+
+    - name: Init copr
+      id: init
+      uses: ./init
+      with:
+        token: ${{ secrets.COPR_SECRETS }}
+
+    - name: Delete project
+      uses: ./delete-project
+      with:
+        coprcfg: ${{ steps.init.outputs.coprcfg }}
+        project: ${{ env.COPR_PROJECT }}
+        account: ${{ env.COPR_ACCOUNT }}
+
+    - name: Test that project was deleted
+      env:
+        COPRCFG: ${{ steps.init.outputs.coprcfg }}
+      run: |
+        if copr-cli --config "$COPRCFG" list "$COPR_ACCOUNT" | grep "$COPR_PROJECT" &> /dev/null; then
+          echo "Project exist."
+          exit 1
+        else
+          echo "Project does not exist."
+          exit 0
+        fi

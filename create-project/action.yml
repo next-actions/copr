@@ -76,3 +76,15 @@ runs:
         --delete-after-days "$DELETE_AFTER_DAYS"                    \
         --description "$DESCRIPTION"                                \
         --instructions "$INSTRUCTIONS"
+
+  # Workaround: Backend process error: Giving up waiting for copr_base
+  # repository, please try to manually regenerate the DNF repository (e.g. by
+  # 'copr-cli regenerate-repos <project_name>')
+  - name: Regenerate repositories
+    shell: bash
+    env:
+      COPRCFG: ${{ inputs.coprcfg }}
+      ACCOUNT: ${{ inputs.account }}
+      PROJECT: ${{ inputs.project }}
+    run: |
+      copr-cli --config "$COPRCFG" regenerate-repos "$ACCOUNT/$PROJECT"

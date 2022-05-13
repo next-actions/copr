@@ -55,9 +55,10 @@ runs:
     run: |
       set -ex
 
+      command=create
       if copr-cli --config "$COPRCFG" list "$ACCOUNT" | grep "Name: $PROJECT" &> /dev/null; then
-        echo "Project $PROJECT already exist. Nothing to do."
-        exit 0
+        echo "Project $PROJECT already exist. We will modify it to apply any changed configuration."
+        command=modify
       fi
 
       args=""
@@ -70,7 +71,7 @@ runs:
         args+=" --chroot $chroot"
       done
 
-      copr-cli --config "$COPRCFG" create "$ACCOUNT/$PROJECT" $args \
+      copr-cli --config "$COPRCFG" $command "$ACCOUNT/$PROJECT" $args \
         --unlisted-on-hp "$UNLISTED_ON_HP"                          \
         --appstream "$APPSTREAM"                                    \
         --delete-after-days "$DELETE_AFTER_DAYS"                    \

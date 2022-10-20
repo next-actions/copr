@@ -171,7 +171,7 @@ jobs:
       with:
         ref: ${{ github.head_ref }}
 
-    - uses: actions/download-artifact@v2
+    - uses: actions/download-artifact@v3
       with:
         name: ${{ needs.srpm.outputs.srpm }}
         path: .

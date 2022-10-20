@@ -70,11 +70,11 @@ jobs:
       json: ${{ steps.result.outputs.json }}
     steps:
     - name: Checkout out branch
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       if: github.event_name == 'push'
 
     - name: Checkout out pull request
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       if: github.event_name != 'push'
       with:
         ref: ${{ github.head_ref }}
@@ -97,11 +97,11 @@ jobs:
       contents: read
     steps:
     - name: Checkout out branch
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       if: github.event_name == 'push'
 
     - name: Checkout out pull request
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       if: github.event_name != 'push'
       with:
         ref: ${{ github.head_ref }}
@@ -162,11 +162,11 @@ jobs:
       fail-fast: false
     steps:
     - name: Checkout out branch
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       if: github.event_name == 'push'
 
     - name: Checkout out pull request
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       if: github.event_name != 'push'
       with:
         ref: ${{ github.head_ref }}
@@ -199,11 +199,11 @@ jobs:
       contents: read
     steps:
     - name: Checkout out branch
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       if: github.event_name == 'push'
 
     - name: Checkout out pull request
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       if: github.event_name != 'push'
       with:
         ref: ${{ github.head_ref }}

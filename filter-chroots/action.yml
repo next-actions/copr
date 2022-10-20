@@ -29,5 +29,5 @@ runs:
       list=`copr-cli --config "${{ inputs.coprcfg }}" list-chroots | grep -E "${{ inputs.filter }}" | grep -E -v "${{ inputs.exclude }}" | tr '\n' ' '`
       json=`jq -c -n --arg item "$list" '$item | split(" ") | map(select(length > 0))'`
 
-      echo ::set-output name=list::$list
-      echo ::set-output name=json::$json
+      echo "list=$list" >> $GITHUB_OUTPUT
+      echo "json=$json" >> $GITHUB_OUTPUT

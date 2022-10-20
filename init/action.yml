@@ -27,4 +27,4 @@ runs:
       run: |
         dir=`mktemp -d`
         echo -e "$TOKEN" > $dir/.coprcfg
-        echo ::set-output name=coprcfg::$dir/.coprcfg
+        echo "coprcfg=$dir/.coprcfg" >> $GITHUB_OUTPUT
